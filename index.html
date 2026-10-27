@@ -583,7 +583,13 @@ const GMAP = {"Liebesfilm":["Romantik"],"Romance":["Romantik"],"Science Fiction"
 const normGenres = arr => { const out = []; for (const g of arr || []) for (const x of (GMAP[g] ?? (GENRES.includes(g) ? [g] : []))) if (!out.includes(x)) out.push(x); return out.length ? out.slice(0,3) : ["Drama"]; };
 // Streaming-Namen kürzer anzeigen
 const PNAME = {"Amazon Prime Video":"Prime Video","Amazon Prime Video with Ads":"Prime Video","Disney Plus":"Disney+","Netflix Standard with Ads":"Netflix","Netflix basic with Ads":"Netflix","Paramount Plus":"Paramount+","Paramount Plus Apple TV Channel":"Paramount+","WOW Presents Plus":"WOW Presents","Apple TV Plus":"Apple TV+","Apple TV":"Apple TV"};
-const pn = p => PNAME[p] || p;
+// Varianten zusammenfassen: "… with Ads", "… Amazon Channel", "… Apple TV Channel" zählen als derselbe Dienst
+const PBASE = {"Wow Fiction":"WOW","Wow":"WOW","RTL+ Max":"RTL+","RTL+ Premium":"RTL+","Joyn Plus":"Joyn","Magenta TV+":"MagentaTV","Magenta TV":"MagentaTV","Paramount+":"Paramount+","Paramount Plus":"Paramount+","HBO Max":"HBO Max","Disney Plus":"Disney+","Apple TV Plus":"Apple TV+","Amazon Prime Video":"Prime Video","Netflix":"Netflix"};
+const pn = p => {
+  if (PNAME[p]) return PNAME[p];
+  const base = String(p).replace(/\s+(Amazon|Apple TV|Roku Premium)\s+Channel$/i, "").replace(/\s+(Standard|basic)?\s*with Ads$/i, "").trim();
+  return PBASE[base] || PNAME[base] || base;
+};
 const uniq = a => [...new Set(a)];
 const GCOL = {Action:["#ff5a36","#2b0d14"],Abenteuer:["#f2a33a","#152637"],Animation:["#36d8c6","#36196a"],Doku:["#9fd27a","#0f2a22"],Drama:["#e0a560","#26192f"],Familie:["#ffd166","#352a7a"],Fantasy:["#b48cff","#16123a"],Historie:["#cfa86c","#2b2017"],Horror:["#d1162a","#0c0507"],Komödie:["#ffcf3a","#b32656"],Krieg:["#9aab5f","#1a1d14"],Krimi:["#4f8cff","#0b1022"],Musik:["#ff4fd8","#1b0f3a"],Mystery:["#6f7dff","#0d0b1f"],Reality:["#ff9a5a","#3a1530"],Romantik:["#ff6f91","#3b0f2b"],"Sci-Fi":["#22e0ff","#0a0f2c"],Thriller:["#a7b0c4","#0e1016"],Western:["#e08a3c","#2a160a"]};
 
@@ -610,6 +616,7 @@ const BASE = [];
 const strs = (a, n) => Array.isArray(a) ? a.filter(x => typeof x === "string" && x).map(x => x.slice(0,80)).slice(0,n) : [];
 function fromTmdb(x){
   if (!x || typeof x.id !== "string" || !/^[mt]\d+$/.test(x.id) || !x.title) return null;
+  if ((x.genres || []).some(g => ["Talk", "News"].includes(g))) return null; // Talkshows und Nachrichten nicht swipen
   const p = x.prov || {};
   return {
     id: x.id, type: x.t === "s" ? "s" : "f", title: String(x.title).slice(0,120), orig: String(x.orig || "").slice(0,120),
@@ -631,8 +638,10 @@ let ALIAS = new Map();          // alte Startkatalog-ID -> TMDB-ID, damit alte S
 const canon = id => ALIAS.get(id) || id;
 function reindex(){
   INDEX = new Map(); RANK = new Map();
-  const n = Math.max(CATALOG.length, 1);
-  CATALOG.forEach((it, k) => { INDEX.set(it.id, it); RANK.set(it.id, k / n); });
+  // Rang innerhalb von Filmen bzw. Serien, damit sich beide im Stapel abwechseln
+  const nF = Math.max(CATALOG.filter(x => x.type === "f").length, 1), nS = Math.max(CATALOG.length - nF, 1);
+  let kF = 0, kS = 0;
+  CATALOG.forEach(it => { INDEX.set(it.id, it); RANK.set(it.id, it.type === "s" ? kS++ / nS : kF++ / nF); });
   for (const c of S.custom) INDEX.set(c.id, c);
   S.watched = new Set([...S.watchedRaw].map(canon));
 }
